@@ -1,4 +1,4 @@
-import { Search, HelpCircle, PlusCircle, LayoutDashboard } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
