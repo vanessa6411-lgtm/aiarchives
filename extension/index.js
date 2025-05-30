@@ -6,46 +6,35 @@ chrome.runtime.onMessage.addListener(function (request, _, sendResponse) {
   if (request.action === 'scrape') {
     scrape();
   }
+  if (request.action === 'model') {
+    model = request.model;
+  }
   sendResponse({ success: true });
   return true;
 });
 
 async function scrape() {
   const htmlDoc = document.documentElement.innerHTML;
+  if (!htmlDoc || isRequesting) return;
 
-  if (htmlDoc) {
-    isRequesting = true;
+  isRequesting = true;
 
-    if (isRequesting) {
-      const apiUrl = `https://your-api-url.com/api/`;
-      const bodyContent = new FormData();
-      const headers = {};
+  const apiUrl = 'https://your-api-url.com/api/conversation';
+  const body = new FormData();
 
-      bodyContent.append(
-        'htmlDoc',
-        new Blob([document.documentElement.innerHTML], { type: 'text/plain; charset=utf-8' })
-      );
+  // raw HTML
+  body.append('htmlDoc', new Blob([htmlDoc], { type: 'text/plain; charset=utf-8' }));
+  // model
+  body.append('model', model);
 
-      fetch(apiUrl, {
-        method: 'POST',
-        headers,
-        body: bodyContent,
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
-          return res.json();
-        })
-        .then((obj) => {
-          window.open(obj.url, '_blank');
-        })
-        .catch((err) => {
-          isRequesting = false;
-          alert(`Error saving conversation: ${err.message}`);
-        });
-    }
-
-    setTimeout(() => {
-      isRequesting = false;
-    }, 2000);
+  try {
+    const res = await fetch(apiUrl, { method: 'POST', body });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { url } = await res.json();
+    window.open(url, '_blank'); // view the saved conversation
+  } catch (err) {
+    alert(`Error saving conversation: ${err.message}`);
+  } finally {
+    isRequesting = false;
   }
 }
