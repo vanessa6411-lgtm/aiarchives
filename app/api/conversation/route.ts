@@ -63,6 +63,8 @@ export async function POST(req: NextRequest) {
     const dbInput: CreateConversationInput = {
       model: conversation.model,
       scrapedAt: new Date(conversation.scrapedAt),
+      sourceHtmlBytes: conversation.sourceHtmlBytes,
+      views: 0,
       contentKey,
     };
 
