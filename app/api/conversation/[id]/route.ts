@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getConversationRecord } from '@/lib/db/conversations';
 import { s3Client } from '@/lib/storage/s3';
+import { dbClient } from '@/lib/db/client';
 import { loadConfig } from '@/lib/config';
 
 let isInitialized = false;
@@ -12,6 +13,7 @@ async function ensureInitialized() {
   if (!isInitialized) {
     try {
       const config = loadConfig();
+      await dbClient.initialize(config.database);
       s3Client.initialize(config.s3);
       isInitialized = true;
     } catch (error) {

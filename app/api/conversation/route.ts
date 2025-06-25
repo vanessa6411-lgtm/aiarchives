@@ -14,10 +14,19 @@ let isInitialized = false;
  */
 async function ensureInitialized() {
   if (!isInitialized) {
-    const config = loadConfig();
-    await dbClient.initialize(config.database);
-    s3Client.initialize(config.s3);
-    isInitialized = true;
+    try {
+      const config = loadConfig();
+      await dbClient.initialize(config.database);
+      s3Client.initialize(config.s3);
+      isInitialized = true;
+    } catch (error) {
+      // If S3 client is already initialized, that's fine
+      if (error instanceof Error && error.message.includes('already initialized')) {
+        isInitialized = true;
+      } else {
+        throw error;
+      }
+    }
   }
 }
 
