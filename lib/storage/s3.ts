@@ -81,6 +81,32 @@ class S3StorageClient {
 
     return getSignedUrl(this.client, command, { expiresIn });
   }
+
+  /**
+   * Retrieve conversation content from S3
+   * @param key S3 key of the conversation content
+   * @returns The conversation content as a string
+   */
+  public async getConversationContent(key: string): Promise<string> {
+    if (!this.client) {
+      throw new Error('S3 client not initialized');
+    }
+
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+    });
+
+    const response = await this.client.send(command);
+
+    if (!response.Body) {
+      throw new Error('No content found in S3 object');
+    }
+
+    // Convert the readable stream to string
+    const content = await response.Body.transformToString();
+    return content;
+  }
 }
 
 export const s3Client = S3StorageClient.getInstance();

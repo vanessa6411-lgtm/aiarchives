@@ -19,13 +19,13 @@ async function ensureInitialized() {
 /**
  * GET /api/conversation/[id]
  *
- * Retrieves a signed URL for accessing a conversation's content
+ * Retrieves the full conversation data including content and metadata
  *
  * @param request - The incoming request
  * @param context - Route context containing the conversation ID
  *
  * Response:
- * - 200: { url: string } - The signed URL to access the conversation content
+ * - 200: { conversation: ConversationRecord, content: string } - The conversation data and content
  * - 404: { error: string } - Conversation not found
  * - 500: { error: string } - Server error
  */
@@ -36,10 +36,17 @@ export async function GET(
   try {
     await ensureInitialized();
     const id = (await params).id;
-    const record = await getConversationRecord(id);
-    const signedUrl = await s3Client.getSignedReadUrl(record.contentKey);
 
-    return NextResponse.json({ url: signedUrl });
+    // Get conversation record from database
+    const record = await getConversationRecord(id);
+
+    // Get conversation content from S3
+    const content = await s3Client.getConversationContent(record.contentKey);
+
+    return NextResponse.json({
+      conversation: record,
+      content: content,
+    });
   } catch (error) {
     console.error('Error retrieving conversation:', error);
 
