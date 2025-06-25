@@ -24,7 +24,8 @@ class S3StorageClient {
 
   public initialize(config: S3Config): void {
     if (this.client) {
-      throw new Error('S3 client already initialized');
+      // Already initialized, just return
+      return;
     }
 
     this.client = new S3Client({
