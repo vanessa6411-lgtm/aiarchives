@@ -147,7 +147,7 @@ const ConversationDetailPage = async ({ params }: { params: Promise<{ id: string
         </main>
       </div>
     );
-  } catch (error) {
+  } catch {
     return (
       <div className='flex flex-col min-h-screen bg-gray-100'>
         <header className='bg-gray-200 p-4 flex justify-between items-center'>
@@ -174,7 +174,7 @@ const ConversationDetailPage = async ({ params }: { params: Promise<{ id: string
             <CardContent className='p-8 text-center'>
               <h1 className='text-2xl font-semibold text-gray-800 mb-4'>Conversation Not Found</h1>
               <p className='text-gray-500 mb-6'>
-                The conversation you're looking for doesn't exist or has been removed.
+                The conversation you&apos;re looking for doesn&apos;t exist or has been removed.
               </p>
               <Link href='/'>
                 <Button>Back to Conversations</Button>
