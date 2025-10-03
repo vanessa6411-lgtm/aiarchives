@@ -1,3 +1,114 @@
+name: Export Postgres and upload to S3
+
+on:
+  workflow_dispatch:    # permite rodar manualmente pela UI
+  push:
+    branches: [ main ]  # também roda quando fizer push em main
+
+jobs:
+  export-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Start SSH agent and load key
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Create CSV on remote (EC2) from conversations table
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          # usar sudo -u postgres para executar psql com o usuário postgres
+          sudo -u postgres psql -d aiarchives -c "\copy (SELECT id, content, created_at FROM conversations ORDER BY id DESC) TO '/tmp/conversations.csv' WITH CSV HEADER"
+          ls -l /tmp/conversations.csv
+          EOF
+
+      - name: Copy CSV from remote to runner
+        run: |
+          scp -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/conversations.csv ./conversations.csv
+          ls -lh conversations.csv
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload CSV to S3
+        run: |
+          aws s3 cp ./conversations.csv s3://${{ secrets.AWS_BUCKET_NAME }}/conversations-${{ github.run_id }}.csv --acl public-read
+          echo "https://${{ secrets.AWS_BUCKET_NAME }}.s3.${{ secrets.AWS_REGION }}.amazonaws.com/conversations-${{ github.run_id }}.csv"
+
+
+
+
+
+name: Deploy to EC2 (Production)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create .env file from secrets
+        run: |
+          cat > .env <<EOF
+          DATABASE_URL=postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
+          AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION=${{ secrets.AWS_REGION }}
+          AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }}
+          NEXT_PUBLIC_BASE_URL=${{ secrets.NEXT_PUBLIC_BASE_URL || '' }}
+          EOF
+          echo ".env created (values masked in logs)."
+
+      - name: Start SSH agent and add private key
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Ensure remote dir exists
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ${{ secrets.REMOTE_APP_DIR }}"
+
+      - name: Rsync files to remote (excluding node_modules .git)
+        run: |
+          rsync -azh --delete --exclude 'node_modules' --exclude '.git' --exclude '.env.local' -e "ssh -o StrictHostKeyChecking=no" ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.REMOTE_APP_DIR }}
+
+      - name: Copy generated .env to remote
+        run: |
+          scp -o StrictHostKeyChecking=no .env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.REMOTE_APP_DIR }}/.env
+
+      - name: Install deps, build and restart (remote)
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} <<'EOF'
+          cd ${{ secrets.REMOTE_APP_DIR }} || exit 1
+          # instalar dependências (omit dev) e build
+          npm ci --omit=dev || npm install --omit=dev
+          npm run build || echo "build step finished"
+          # reiniciar via PM2 (ajuste se seu ecosytem for diferente)
+          if command -v pm2 > /dev/null; then
+            if [ -f ecosystem.config.js ]; then
+              pm2 reload ecosystem.config.js || pm2 start ecosystem.config.js
+            else
+              pm2 restart all || pm2 start npm --name "aiarchives" -- start
+            fi
+          fi
+          EOF
+
+
 name: Deploy AI Archives to EC2
 
 on:
